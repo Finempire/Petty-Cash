@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: petty-cash-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node src/index.js
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://samshek.netlify.app
+      - key: PORT
+        value: 10000
+    disk:
+      name: petty-cash-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1

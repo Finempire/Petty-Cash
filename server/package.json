@@ -2,6 +2,9 @@
   "name": "petty-cash-server",
   "version": "1.0.0",
   "description": "Petty Cash Management System – Backend API",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",

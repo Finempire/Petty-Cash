@@ -112,10 +112,13 @@ CREATE TABLE IF NOT EXISTS purchases (
   invoice_date        TEXT,
   total_invoice_amount REAL NOT NULL DEFAULT 0,
   invoice_file_path   TEXT,
+  tax_invoice_path    TEXT,
+  invoice_type_submitted TEXT NOT NULL DEFAULT 'TAX_INVOICE'
+    CHECK(invoice_type_submitted IN ('PROVISIONAL','TAX_INVOICE')),
   notes               TEXT,
   accountant_comment  TEXT,
   status              TEXT NOT NULL DEFAULT 'INVOICE_SUBMITTED'
-    CHECK(status IN ('INVOICE_SUBMITTED','UNDER_REVIEW','APPROVED','REJECTED','PAID','PARTIALLY_PAID')),
+    CHECK(status IN ('INVOICE_SUBMITTED','UNDER_REVIEW','APPROVED','REJECTED','PAID','PARTIALLY_PAID','PAID_TAX_INVOICE_PENDING','COMPLETED')),
   created_at          TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );

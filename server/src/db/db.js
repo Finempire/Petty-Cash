@@ -19,4 +19,8 @@ db.exec("PRAGMA foreign_keys=ON");
 const schema = fs.readFileSync(SCHEMA_PATH, 'utf8');
 db.exec(schema);
 
+// Migrations for existing DBs
+try { db.exec("ALTER TABLE purchases ADD COLUMN tax_invoice_path TEXT"); } catch { }
+try { db.exec("ALTER TABLE purchases ADD COLUMN invoice_type_submitted TEXT NOT NULL DEFAULT 'TAX_INVOICE'"); } catch { }
+
 module.exports = db;

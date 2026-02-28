@@ -119,7 +119,7 @@ export default function CreatePurchase() {
 
     const [form, setForm] = useState({
         vendor_id: '', invoice_no: '', invoice_date: new Date().toISOString().split('T')[0],
-        total_invoice_amount: '', notes: '',
+        total_invoice_amount: '', notes: '', invoice_type_submitted: 'TAX_INVOICE',
         lines: []
     });
     const [invoiceFile, setInvoiceFile] = useState(null);
@@ -185,6 +185,7 @@ export default function CreatePurchase() {
                 invoice_date: form.invoice_date,
                 total_invoice_amount: totalInvoice || Number(form.total_invoice_amount) || 0,
                 notes: form.notes,
+                invoice_type_submitted: form.invoice_type_submitted,
                 lines: form.lines.map(l => ({
                     material_id: l.material_id, description: l.description,
                     quantity: Number(l.quantity), actual_rate: Number(l.actual_rate) || 0,
@@ -248,6 +249,15 @@ export default function CreatePurchase() {
                         <input type="date" className="form-control" value={form.invoice_date} onChange={e => setForm(f => ({ ...f, invoice_date: e.target.value }))} />
                     </div>
                     <div className="form-group">
+                        <label className="form-label">Invoice Type <span className="required">*</span></label>
+                        <select className="form-control" value={form.invoice_type_submitted} onChange={e => setForm(f => ({ ...f, invoice_type_submitted: e.target.value }))}>
+                            <option value="TAX_INVOICE">Tax Invoice / Final Bill</option>
+                            <option value="PROVISIONAL">Provisional Invoice / Slip</option>
+                        </select>
+                    </div>
+                </div>
+                <div className="form-row">
+                    <div className="form-group">
                         <label className="form-label">Notes</label>
                         <input className="form-control" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Additional notes" />
                     </div>
@@ -285,7 +295,7 @@ export default function CreatePurchase() {
             </div>
 
             <div className="card mb-4">
-                <div className="card-title mb-3">Invoice Attachment</div>
+                <div className="card-title mb-3">{form.invoice_type_submitted === 'PROVISIONAL' ? 'Provisional Invoice / Slip' : 'Tax Invoice / Final Bill'}</div>
                 <div {...getRootProps()} className={`dropzone ${isDragActive ? 'active' : ''}`}>
                     <input {...getInputProps()} />
                     {invoiceFile ? (

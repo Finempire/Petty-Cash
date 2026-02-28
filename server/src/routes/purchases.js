@@ -81,32 +81,32 @@ router.get('/:id', authenticateToken, (req, res) => {
 // POST /api/purchases  (Runner Boy creates a purchase)
 router.post('/', authenticateToken, requireRole('RUNNER_BOY'), (req, res) => {
     try {
-        const { material_request_id, vendor_id, invoice_no, invoice_date, total_invoice_amount, notes, lines } = req.body;
+        const { material_request_id, vendor_id, invoice_no, invoice_date, total_invoice_amount, notes, lines, invoice_type_submitted } = req.body;
         if (!material_request_id) return res.status(400).json({ error: 'material_request_id required' });
+        const invoiceType = ['PROVISIONAL', 'TAX_INVOICE'].includes(invoice_type_submitted) ? invoice_type_submitted : 'TAX_INVOICE';
 
         const mr = db.prepare('SELECT * FROM material_requests WHERE id=?').get(material_request_id);
         if (!mr) return res.status(404).json({ error: 'Material request not found' });
         if (!['PENDING_PURCHASE', 'IN_PROGRESS'].includes(mr.status)) return res.status(400).json({ error: 'Request is not in a purchasable state' });
 
         const id = uuidv4();
-        db.prepare(`INSERT INTO purchases (id,material_request_id,runner_boy_user_id,vendor_id,invoice_no,invoice_date,total_invoice_amount,notes,status)
-        VALUES (?,?,?,?,?,?,?,?,'INVOICE_SUBMITTED')`).run(id, material_request_id, req.user.id, vendor_id, invoice_no || null, invoice_date || null, total_invoice_amount || 0, notes || null);
+        db.prepare(`INSERT INTO purchases (id,material_request_id,runner_boy_user_id,vendor_id,invoice_no,invoice_date,total_invoice_amount,notes,invoice_type_submitted,status)
+        VALUES (?,?,?,?,?,?,?,?,?,'INVOICE_SUBMITTED')`).run(id, material_request_id, req.user.id, vendor_id, invoice_no || null, invoice_date || null, total_invoice_amount || 0, notes || null, invoiceType);
 
         if (lines && lines.length > 0) {
             const insertLine = db.prepare('INSERT INTO purchase_lines (id,purchase_id,material_id,description,quantity,rate,amount) VALUES (?,?,?,?,?,?,?)');
             for (const l of lines) insertLine.run(uuidv4(), id, nullify(l.material_id), l.description || null, l.quantity || 0, l.actual_rate || l.rate || 0, (l.quantity || 0) * (l.actual_rate || l.rate || 0));
         }
 
-        // Update request status
         db.prepare("UPDATE material_requests SET status='IN_PROGRESS', updated_at=datetime('now') WHERE id=?").run(material_request_id);
 
-        // Notify accountants
+        const typeLabel = invoiceType === 'PROVISIONAL' ? 'Provisional Invoice' : 'Tax Invoice';
         const accountants = db.prepare("SELECT id FROM users WHERE role='ACCOUNTANT' AND status='ACTIVE'").all();
         for (const a of accountants) {
-            notify(a.id, 'Invoice Submitted', `Runner ${req.user.name || 'Unknown'} submitted invoice for ${mr.request_no}`, `/purchases/${id}`);
+            notify(a.id, 'Invoice Submitted', `Runner ${req.user.name || 'Unknown'} submitted ${typeLabel} for ${mr.request_no}`, `/purchases/${id}`);
         }
 
-        auditLog('Purchase', id, 'CREATE', req.user.id, null, { material_request_id, status: 'INVOICE_SUBMITTED' }, req);
+        auditLog('Purchase', id, 'CREATE', req.user.id, null, { material_request_id, status: 'INVOICE_SUBMITTED', invoice_type_submitted: invoiceType }, req);
         res.status(201).json({ id });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -154,6 +154,32 @@ router.patch('/:id/reject', authenticateToken, requireRole('ACCOUNTANT'), (req, 
 
     auditLog('Purchase', purchase.id, 'REJECT', req.user.id, purchase, { status: 'REJECTED', accountant_comment }, req);
     res.json({ success: true });
+});
+
+// POST /api/purchases/:id/tax-invoice  (Runner uploads final tax invoice)
+router.post('/:id/tax-invoice', authenticateToken, requireRole('RUNNER_BOY'), (req, res, next) => {
+    req.uploadFolder = 'invoices';
+    next();
+}, upload.single('file'), (req, res) => {
+    const purchase = db.prepare('SELECT * FROM purchases WHERE id=?').get(req.params.id);
+    if (!purchase) return res.status(404).json({ error: 'Not found' });
+    if (purchase.runner_boy_user_id !== req.user.id) return res.status(403).json({ error: 'Only the assigned Runner Boy can upload the tax invoice' });
+    if (purchase.invoice_type_submitted !== 'PROVISIONAL') return res.status(400).json({ error: 'Tax invoice upload only applicable for provisional invoice purchases' });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    const filePath = path.join('invoices', req.file.filename);
+    const newStatus = ['PAID', 'PARTIALLY_PAID', 'PAID_TAX_INVOICE_PENDING'].includes(purchase.status) ? 'COMPLETED' : purchase.status;
+    db.prepare("UPDATE purchases SET tax_invoice_path=?, status=?, updated_at=datetime('now') WHERE id=?").run(filePath, newStatus, req.params.id);
+
+    // Notify accountants
+    const mr = db.prepare('SELECT * FROM material_requests WHERE id=?').get(purchase.material_request_id);
+    const accountants = db.prepare("SELECT id FROM users WHERE role='ACCOUNTANT' AND status='ACTIVE'").all();
+    for (const a of accountants) {
+        notify(a.id, 'Tax Invoice Uploaded', `Runner ${req.user.name} uploaded final Tax Invoice for ${mr?.request_no || 'purchase'}`, `/purchases/${purchase.id}`);
+    }
+
+    auditLog('Purchase', purchase.id, 'TAX_INVOICE_UPLOAD', req.user.id, purchase, { status: newStatus, tax_invoice_path: filePath }, req);
+    res.json({ file_path: filePath, status: newStatus });
 });
 
 module.exports = router;

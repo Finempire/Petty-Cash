@@ -129,18 +129,6 @@ function VendorConfirmationSection({ purchase, user, onUpdate }) {
                 {vc && <ConfirmationStatusBadge status={vc.acknowledgement_status} />}
             </div>
 
-            {/* Payment Proofs for viewing */}
-            {purchase.payments?.filter(p => p.payment_proof_file_path).length > 0 && (
-                <div style={{ marginBottom: 16, padding: '12px 14px', background: 'var(--color-bg-secondary)', borderRadius: 6 }}>
-                    <div className="font-semibold" style={{ fontSize: 13, marginBottom: 8 }}>Payment Proof(s)</div>
-                    {purchase.payments.filter(p => p.payment_proof_file_path).map(p => (
-                        <FilePreview key={p.id} filePath={p.payment_proof_file_path}
-                            label={`${p.payment_date} \u2013 \u20B9${(p.paid_amount || 0).toLocaleString('en-IN')} (${p.payment_method})`}
-                            downloadName={`${(purchase.vendor_name || 'Vendor').replace(/[^a-zA-Z0-9]/g, '_')}_PaymentProof_${p.payment_date}`} />
-                    ))}
-                </div>
-            )}
-
             {/* Timestamps */}
             {vc && (vc.shown_to_vendor_at || vc.vendor_confirmed_at) && (
                 <div className="detail-grid" style={{ marginBottom: 16 }}>
@@ -216,6 +204,8 @@ export default function PurchaseDetail() {
     const [loading, setLoading] = useState(true);
     const [comment, setComment] = useState('');
     const [actionLoading, setActionLoading] = useState(false);
+    const [taxInvoiceFile, setTaxInvoiceFile] = useState(null);
+    const [taxUploading, setTaxUploading] = useState(false);
 
     const load = () => {
         api.get(`/purchases/${id}`).then(r => { setPurchase(r.data); setLoading(false); }).catch(() => setLoading(false));
@@ -247,10 +237,28 @@ export default function PurchaseDetail() {
     if (!purchase) return <AppLayout pageTitle="Purchase Detail"><div className="empty-state"><div className="empty-title">Purchase not found</div></div></AppLayout>;
 
     const isAccountant = user?.role === 'ACCOUNTANT';
+    const isRunner = user?.role === 'RUNNER_BOY' && purchase.runner_boy_user_id === user?.id;
     const canReview = isAccountant && ['INVOICE_SUBMITTED', 'UNDER_REVIEW'].includes(purchase.status);
     const canPay = isAccountant && ['APPROVED', 'PARTIALLY_PAID'].includes(purchase.status);
     const totalPaid = purchase.payments?.reduce((s, p) => s + (p.paid_amount || 0), 0) || 0;
     const outstanding = (purchase.total_invoice_amount || 0) - totalPaid;
+    const isProvisional = purchase.invoice_type_submitted === 'PROVISIONAL';
+    const needsTaxInvoice = isProvisional && !purchase.tax_invoice_path;
+    const vendorDownloadName = (purchase.vendor_name || 'Vendor').replace(/[^a-zA-Z0-9]/g, '_');
+
+    const handleTaxInvoiceUpload = async () => {
+        if (!taxInvoiceFile) { toast.error('Select a file first'); return; }
+        setTaxUploading(true);
+        try {
+            const fd = new FormData();
+            fd.append('file', taxInvoiceFile);
+            await api.post(`/purchases/${id}/tax-invoice`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+            toast.success('Tax Invoice uploaded successfully');
+            setTaxInvoiceFile(null);
+            load();
+        } catch (err) { toast.error(err.response?.data?.error || 'Upload failed'); }
+        finally { setTaxUploading(false); }
+    };
 
     return (
         <AppLayout pageTitle={`Purchase \u2013 ${purchase.invoice_no || 'Details'}`}>
@@ -278,14 +286,74 @@ export default function PurchaseDetail() {
                     <div className="detail-item"><div className="detail-label">Invoice Amount</div><div className="detail-value font-bold text-primary">{'\u20B9'}{(purchase.total_invoice_amount || 0).toLocaleString('en-IN')}</div></div>
                     <div className="detail-item"><div className="detail-label">Total Paid</div><div className="detail-value font-bold" style={{ color: 'var(--color-success)' }}>{'\u20B9'}{totalPaid.toLocaleString('en-IN')}</div></div>
                     <div className="detail-item"><div className="detail-label">Outstanding</div><div className="detail-value font-bold" style={{ color: outstanding > 0 ? 'var(--color-danger)' : 'var(--color-success)' }}>{'\u20B9'}{outstanding.toLocaleString('en-IN')}</div></div>
+                    <div className="detail-item"><div className="detail-label">Invoice Type</div>
+                        <div className="detail-value">
+                            <span className="badge" style={{ background: isProvisional ? 'rgba(245,158,11,0.12)' : 'rgba(22,163,74,0.12)', color: isProvisional ? '#d97706' : '#16a34a', fontWeight: 600, fontSize: 11 }}>
+                                {isProvisional ? 'Provisional Invoice' : 'Tax Invoice'}
+                            </span>
+                        </div>
+                    </div>
                     <div className="detail-item"><div className="detail-label">Runner Boy</div><div className="detail-value">{purchase.runner_name || '\u2014'}</div></div>
                     <div className="detail-item"><div className="detail-label">Buyer</div><div className="detail-value">{purchase.buyer_name || '\u2014'}</div></div>
                     <div className="detail-item"><div className="detail-label">Order</div><div className="detail-value">{purchase.order_no || '\u2014'} {purchase.style ? `(${purchase.style})` : ''}</div></div>
                 </div>
                 {purchase.notes && <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--color-bg-secondary)', borderRadius: 6, fontSize: 13 }}><strong>Notes:</strong> {purchase.notes}</div>}
                 {purchase.accountant_comment && <div style={{ marginTop: 8, padding: '10px 14px', background: 'rgba(79,70,229,0.06)', borderRadius: 6, fontSize: 13, borderLeft: '3px solid var(--color-primary)' }}><strong>Accountant:</strong> {purchase.accountant_comment}</div>}
-                <FilePreview filePath={purchase.invoice_file_path} label="Invoice Attachment"
-                    downloadName={`${(purchase.vendor_name || 'Vendor').replace(/[^a-zA-Z0-9]/g, '_')}_Invoice_${purchase.invoice_no || 'NA'}`} />
+            </div>
+
+            {/* Documents Card */}
+            <div className="card mb-4">
+                <div className="card-title mb-4">Documents</div>
+
+                {/* 1. Initial Invoice */}
+                <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--color-bg-secondary)', borderRadius: 6 }}>
+                    <div className="font-semibold" style={{ fontSize: 13, marginBottom: 4 }}>
+                        {isProvisional ? 'Provisional Invoice / Slip' : 'Tax Invoice / Final Bill'}
+                    </div>
+                    <FilePreview filePath={purchase.invoice_file_path} label="View Document"
+                        downloadName={`${vendorDownloadName}_${isProvisional ? 'ProvisionalInvoice' : 'TaxInvoice'}_${purchase.invoice_no || 'NA'}`} />
+                </div>
+
+                {/* 2. Payment Proofs */}
+                {purchase.payments?.filter(p => p.payment_proof_file_path).length > 0 && (
+                    <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--color-bg-secondary)', borderRadius: 6 }}>
+                        <div className="font-semibold" style={{ fontSize: 13, marginBottom: 4 }}>Payment Proof(s)</div>
+                        {purchase.payments.filter(p => p.payment_proof_file_path).map(p => (
+                            <FilePreview key={p.id} filePath={p.payment_proof_file_path}
+                                label={`${p.payment_date} \u2013 \u20B9${(p.paid_amount || 0).toLocaleString('en-IN')} (${p.payment_method})`}
+                                downloadName={`${vendorDownloadName}_PaymentProof_${p.payment_date}`} />
+                        ))}
+                    </div>
+                )}
+
+                {/* 3. Tax Invoice (if purchase started with provisional) */}
+                {isProvisional && (
+                    <div style={{ marginBottom: 8, padding: '10px 14px', background: purchase.tax_invoice_path ? 'rgba(22,163,74,0.06)' : 'rgba(245,158,11,0.06)', borderRadius: 6, border: `1px solid ${purchase.tax_invoice_path ? 'rgba(22,163,74,0.2)' : 'rgba(245,158,11,0.2)'}` }}>
+                        <div className="font-semibold" style={{ fontSize: 13, marginBottom: 4 }}>
+                            Final Tax Invoice / GST Bill
+                            {purchase.tax_invoice_path
+                                ? <span className="badge" style={{ marginLeft: 8, background: 'rgba(22,163,74,0.12)', color: '#16a34a', fontWeight: 600, fontSize: 10 }}>Uploaded</span>
+                                : <span className="badge" style={{ marginLeft: 8, background: 'rgba(245,158,11,0.12)', color: '#d97706', fontWeight: 600, fontSize: 10 }}>Pending</span>
+                            }
+                        </div>
+                        {purchase.tax_invoice_path ? (
+                            <FilePreview filePath={purchase.tax_invoice_path} label="View Tax Invoice"
+                                downloadName={`${vendorDownloadName}_TaxInvoice_${purchase.invoice_no || 'NA'}`} />
+                        ) : isRunner ? (
+                            <div style={{ marginTop: 8 }}>
+                                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 8 }}>Upload the final Tax Invoice / GST bill received from the vendor</div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <input type="file" accept="image/*,.pdf" onChange={e => setTaxInvoiceFile(e.target.files[0] || null)} style={{ fontSize: 12 }} />
+                                    <button className="btn btn-primary btn-sm" onClick={handleTaxInvoiceUpload} disabled={!taxInvoiceFile || taxUploading}>
+                                        {taxUploading ? <><span className="spinner-inline"></span> Uploading...</> : 'Upload Tax Invoice'}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>Awaiting final Tax Invoice upload from the Runner Boy</div>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Vendor Details */}

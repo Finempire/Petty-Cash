@@ -157,6 +157,7 @@ export function StatusBadge({ status }) {
         INVOICE_SUBMITTED: 'badge-submitted', UNDER_REVIEW: 'badge-review',
         APPROVED: 'badge-approved', REJECTED: 'badge-rejected',
         PAID: 'badge-paid', PARTIALLY_PAID: 'badge-partial',
+        PAID_TAX_INVOICE_PENDING: 'badge-pending',
     };
     const labels = {
         DRAFT: 'Draft', PENDING_PURCHASE: 'Pending', IN_PROGRESS: 'In Progress',
@@ -164,6 +165,7 @@ export function StatusBadge({ status }) {
         INVOICE_SUBMITTED: 'Submitted', UNDER_REVIEW: 'Under Review',
         APPROVED: 'Approved', REJECTED: 'Rejected',
         PAID: 'Paid', PARTIALLY_PAID: 'Partial',
+        PAID_TAX_INVOICE_PENDING: 'Tax Invoice Pending',
     };
     return <span className={`badge ${map[status] || 'badge-draft'}`}>{labels[status] || status}</span>;
 }

@@ -37,7 +37,7 @@ export default function PurchasesReview() {
             <div className="filter-bar">
                 <select className="form-control" value={filters.status} onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}>
                     <option value="">All Status</option>
-                    {['INVOICE_SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'PAID', 'PARTIALLY_PAID'].map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+                    {['INVOICE_SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'PAID', 'PARTIALLY_PAID', 'PAID_TAX_INVOICE_PENDING', 'COMPLETED'].map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
                 </select>
                 <select className="form-control" value={filters.vendor_id} onChange={e => setFilters(f => ({ ...f, vendor_id: e.target.value }))}>
                     <option value="">All Vendors</option>

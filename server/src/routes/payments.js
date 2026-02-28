@@ -36,7 +36,13 @@ router.post('/', authenticateToken, requireRole('ACCOUNTANT'), (req, res) => {
 
     // Compute cumulative paid
     const totalPaid = db.prepare('SELECT COALESCE(SUM(paid_amount),0) as total FROM payments WHERE purchase_id=?').get(purchase_id).total;
-    const newStatus = totalPaid >= purchase.total_invoice_amount ? 'PAID' : 'PARTIALLY_PAID';
+    let newStatus;
+    if (totalPaid >= purchase.total_invoice_amount) {
+        // If original was provisional and tax invoice not yet uploaded, mark as pending
+        newStatus = (purchase.invoice_type_submitted === 'PROVISIONAL' && !purchase.tax_invoice_path) ? 'PAID_TAX_INVOICE_PENDING' : 'PAID';
+    } else {
+        newStatus = 'PARTIALLY_PAID';
+    }
     db.prepare("UPDATE purchases SET status=?, updated_at=datetime('now') WHERE id=?").run(newStatus, purchase_id);
 
     // Update petty cash ledger

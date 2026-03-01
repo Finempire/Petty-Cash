@@ -91,7 +91,7 @@ router.post('/', authenticateToken, requireRole('RUNNER_BOY'), (req, res) => {
 
         const id = uuidv4();
         db.prepare(`INSERT INTO purchases (id,material_request_id,runner_boy_user_id,vendor_id,invoice_no,invoice_date,total_invoice_amount,notes,invoice_type_submitted,status)
-        VALUES (?,?,?,?,?,?,?,?,?,'INVOICE_SUBMITTED')`).run(id, material_request_id, req.user.id, vendor_id, invoice_no || null, invoice_date || null, total_invoice_amount || 0, notes || null, invoiceType);
+        VALUES (?,?,?,?,?,?,?,?,?,'INVOICE_SUBMITTED')`).run(id, material_request_id, req.user.id, nullify(vendor_id), invoice_no || null, invoice_date || null, total_invoice_amount || 0, notes || null, invoiceType);
 
         if (lines && lines.length > 0) {
             const insertLine = db.prepare('INSERT INTO purchase_lines (id,purchase_id,material_id,description,quantity,rate,amount) VALUES (?,?,?,?,?,?,?)');

@@ -76,15 +76,32 @@ router.post('/', authenticateToken, requireRole('STORE_MANAGER'), (req, res) => 
         const id = uuidv4();
         const request_no = generateRequestNo();
 
-        db.prepare(`INSERT INTO material_requests (id,request_no,requested_by_user_id,department,buyer_id,order_id,preferred_vendor_id,requested_date,expected_purchase_date,status,notes)
-        VALUES (?,?,?,?,?,?,?,?,?,'DRAFT',?)`).run(id, request_no, req.user.id, department || null, nullify(buyer_id), nullify(order_id), nullify(preferred_vendor_id), requested_date || new Date().toISOString().split('T')[0], expected_purchase_date || null, notes || null);
+        console.log('--- POST /requests Debug ---');
+        console.log('Payload:', { reqUser: req.user.id, buyer_id, order_id, preferred_vendor_id, lines });
 
-        const insertLine = db.prepare('INSERT INTO material_request_lines (id,material_request_id,material_id,description,quantity,expected_rate,expected_amount,remarks) VALUES (?,?,?,?,?,?,?,?)');
-        for (const l of lines) {
-            insertLine.run(uuidv4(), id, nullify(l.material_id), l.description || null, Number(l.quantity) || 0, Number(l.expected_rate) || 0, (Number(l.quantity) || 0) * (Number(l.expected_rate) || 0), l.remarks || null);
+        let step = 'INSERT material_requests';
+        try {
+            db.prepare(`INSERT INTO material_requests (id,request_no,requested_by_user_id,department,buyer_id,order_id,preferred_vendor_id,requested_date,expected_purchase_date,status,notes)
+            VALUES (?,?,?,?,?,?,?,?,?,'DRAFT',?)`).run(id, request_no, req.user.id, department || null, nullify(buyer_id), nullify(order_id), nullify(preferred_vendor_id), requested_date || new Date().toISOString().split('T')[0], expected_purchase_date || null, notes || null);
+        } catch (e) {
+            console.error('Failed at', step, e.message);
+            throw e;
         }
 
+        step = 'INSERT material_request_lines';
+        try {
+            const insertLine = db.prepare('INSERT INTO material_request_lines (id,material_request_id,material_id,description,quantity,expected_rate,expected_amount,remarks) VALUES (?,?,?,?,?,?,?,?)');
+            for (const l of lines) {
+                insertLine.run(uuidv4(), id, nullify(l.material_id), l.description || null, Number(l.quantity) || 0, Number(l.expected_rate) || 0, (Number(l.quantity) || 0) * (Number(l.expected_rate) || 0), l.remarks || null);
+            }
+        } catch (e) {
+            console.error('Failed at', step, e.message);
+            throw e;
+        }
+
+        step = 'auditLog';
         auditLog('MaterialRequest', id, 'CREATE', req.user.id, null, { request_no, status: 'DRAFT' }, req);
+
         res.status(201).json({ id, request_no });
     } catch (err) {
         console.error('POST /requests error:', err.message);

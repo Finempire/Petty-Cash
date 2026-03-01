@@ -96,15 +96,15 @@ function AccountantCeoDashboard() {
                 ].map(k => (
                     <div className="kpi-card" key={k.label} style={{ '--accent': k.accent }}>
                         <div className="kpi-label">{k.label}</div>
-                        <div className="kpi-value" style={{ fontSize: typeof k.value === 'string' ? 18 : 22 }}>{k.value}</div>
+                        <div className="kpi-value" style={{ fontSize: typeof k.value === 'string' ? 14 : 18 }}>{k.value}</div>
                     </div>
                 ))}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
                 <div className="card">
-                    <div className="card-title mb-3">Monthly Cash Outflow</div>
-                    <div className="chart-wrap" style={{ height: 200 }}>
+                    <div className="card-title mb-2">Monthly Cash Outflow</div>
+                    <div className="chart-wrap" style={{ height: 160 }}>
                         <ResponsiveContainer>
                             <BarChart data={data.monthlyTrend}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -118,8 +118,8 @@ function AccountantCeoDashboard() {
                 </div>
 
                 <div className="card">
-                    <div className="card-title mb-3">Purchase Status</div>
-                    <div className="chart-wrap" style={{ height: 200 }}>
+                    <div className="card-title mb-2">Purchase Status</div>
+                    <div className="chart-wrap" style={{ height: 160 }}>
                         <ResponsiveContainer>
                             <PieChart>
                                 <Pie data={data.statusBreakdown} dataKey="count" nameKey="status" cx="50%" cy="50%" outerRadius={70} label={e => `${e.status} (${e.count})`} labelLine={{ stroke: '#94a3b8' }} style={{ fontSize: 10 }}>
@@ -133,8 +133,8 @@ function AccountantCeoDashboard() {
             </div>
 
             <div className="card">
-                <div className="card-title mb-3">Top Vendors by Purchase Value</div>
-                <div className="chart-wrap" style={{ height: 180 }}>
+                <div className="card-title mb-2">Top Vendors by Purchase Value</div>
+                <div className="chart-wrap" style={{ height: 140 }}>
                     <ResponsiveContainer>
                         <BarChart data={data.topVendors} layout="vertical">
                             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />

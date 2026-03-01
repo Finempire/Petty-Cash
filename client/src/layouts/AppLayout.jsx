@@ -48,6 +48,7 @@ export default function AppLayout({ children, pageTitle }) {
     const location = useLocation();
     const navigate = useNavigate();
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sb_collapsed') === '1');
     const [notifOpen, setNotifOpen] = useState(false);
     const [notifs, setNotifs] = useState([]);
     const [unread, setUnread] = useState(0);
@@ -85,45 +86,54 @@ export default function AppLayout({ children, pageTitle }) {
         <div className="app-layout">
             {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
 
-            <div className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+            <div className={`sidebar ${sidebarOpen ? 'open' : ''} ${collapsed ? 'collapsed' : ''}`}>
                 <div className="sidebar-logo">
                     <div className="logo-mark">
                         <div className="logo-icon">PC</div>
-                        <div className="logo-text">
+                        {!collapsed && <div className="logo-text">
                             <span className="logo-name">PettyCash</span>
                             <span className="logo-sub">Textile Management</span>
-                        </div>
+                        </div>}
                     </div>
                 </div>
 
                 <nav className="sidebar-nav">
                     <div className="nav-section">
-                        <div className="nav-section-label">{roleLabels[user?.role]}</div>
+                        {!collapsed && <div className="nav-section-label">{roleLabels[user?.role]}</div>}
                         {navItems.map(item => (
                             <Link
                                 key={item.to}
                                 to={item.to}
                                 className={`nav-item ${location.pathname === item.to || (item.to !== '/' && location.pathname.startsWith(item.to)) ? 'active' : ''}`}
                                 onClick={() => setSidebarOpen(false)}
+                                title={collapsed ? item.label : undefined}
                             >
-                                {item.label}
+                                {collapsed ? item.label.charAt(0) : item.label}
                             </Link>
                         ))}
                     </div>
                 </nav>
 
-                <div className="sidebar-user">
+                <button className="sidebar-collapse-btn" onClick={() => { const v = !collapsed; setCollapsed(v); localStorage.setItem('sb_collapsed', v ? '1' : '0'); }}
+                    title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+                    {collapsed ? '\u25B6' : '\u25C0'}
+                </button>
+
+                {!collapsed && <div className="sidebar-user">
                     <div className="user-avatar">{initials}</div>
                     <div className="user-info">
                         <div className="user-name">{user?.name}</div>
                         <div className="user-role">{roleLabels[user?.role]}</div>
                     </div>
-                    <button className="btn btn-ghost btn-sm" onClick={handleLogout} title="Sign out" style={{ fontSize: 11 }}>Sign out</button>
-                </div>
+                    <button className="btn btn-ghost btn-sm" onClick={handleLogout} title="Sign out" style={{ fontSize: 10 }}>Sign out</button>
+                </div>}
+                {collapsed && <div className="sidebar-user" style={{ justifyContent: 'center' }}>
+                    <button className="btn btn-ghost btn-sm" onClick={handleLogout} title="Sign out" style={{ fontSize: 10 }}>{initials}</button>
+                </div>}
             </div>
 
-            <div className="main-content">
-                <div className="topbar">
+            <div className="main-content" style={collapsed ? { marginLeft: 'var(--sidebar-collapsed-width)' } : undefined}>
+                <div className="topbar" style={collapsed ? { left: 'var(--sidebar-collapsed-width)' } : undefined}>
                     <button className="topbar-hamburger" onClick={() => setSidebarOpen(!sidebarOpen)}>&#9776;</button>
                     <div className="topbar-title">{pageTitle}</div>
                     <div className="topbar-actions">

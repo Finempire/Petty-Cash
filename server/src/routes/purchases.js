@@ -182,4 +182,37 @@ router.post('/:id/tax-invoice', authenticateToken, requireRole('RUNNER_BOY'), (r
     res.json({ file_path: filePath, status: newStatus });
 });
 
+// DELETE /api/purchases/:id  (Accountant only)
+router.delete('/:id', authenticateToken, requireRole('ACCOUNTANT'), (req, res) => {
+    try {
+        const purchase = db.prepare('SELECT * FROM purchases WHERE id=?').get(req.params.id);
+        if (!purchase) return res.status(404).json({ error: 'Not found' });
+
+        // Cascade delete related records
+        db.prepare('DELETE FROM purchase_lines WHERE purchase_id=?').run(req.params.id);
+        db.prepare('DELETE FROM payments WHERE purchase_id=?').run(req.params.id);
+        db.prepare('DELETE FROM vendor_confirmations WHERE purchase_id=?').run(req.params.id);
+
+        // Delete the purchase
+        db.prepare('DELETE FROM purchases WHERE id=?').run(req.params.id);
+
+        // Check if there are other purchases for this request, if not reset request status
+        const otherPurchases = db.prepare('SELECT COUNT(*) as cnt FROM purchases WHERE material_request_id=?').get(purchase.material_request_id);
+        if (otherPurchases.cnt === 0) {
+            db.prepare("UPDATE material_requests SET status='PENDING_PURCHASE', updated_at=datetime('now') WHERE id=?").run(purchase.material_request_id);
+        }
+
+        // Notify Runner Boy
+        const mr = db.prepare('SELECT * FROM material_requests WHERE id=?').get(purchase.material_request_id);
+        notify(purchase.runner_boy_user_id, 'Purchase Deleted',
+            `Purchase ${purchase.invoice_no || ''} for ${mr?.request_no || 'request'} has been deleted by Accountant`,
+            `/my-purchases`);
+
+        auditLog('Purchase', purchase.id, 'DELETE', req.user.id, purchase, null, req);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

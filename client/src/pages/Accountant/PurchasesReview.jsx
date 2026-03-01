@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AppLayout from '../../layouts/AppLayout';
 import api from '../../api/client';
+import toast from 'react-hot-toast';
 import { StatusBadge } from '../Dashboard';
 
 export default function PurchasesReview() {
@@ -10,6 +11,7 @@ export default function PurchasesReview() {
     const [loading, setLoading] = useState(true);
     const [filters, setFilters] = useState({ status: '', vendor_id: '', from: '', to: '' });
     const [vendors, setVendors] = useState([]);
+    const [deleting, setDeleting] = useState(null);
 
     useEffect(() => { api.get('/vendors').then(r => setVendors(r.data)); }, []);
 
@@ -22,6 +24,18 @@ export default function PurchasesReview() {
         api.get(`/purchases?${params.toString()}`).then(r => { setPurchases(r.data); setLoading(false); }).catch(() => setLoading(false));
     };
     useEffect(() => { setLoading(true); load(); }, [filters]);
+
+    const handleDelete = async (e, p) => {
+        e.stopPropagation();
+        if (!confirm(`Delete purchase ${p.invoice_no || ''} for ${p.request_no || 'request'}?\n\nThis will permanently remove:\n- All line items\n- All payment records\n- Vendor confirmations\n\nThis action cannot be undone.`)) return;
+        setDeleting(p.id);
+        try {
+            await api.delete(`/purchases/${p.id}`);
+            toast.success('Purchase deleted');
+            setPurchases(prev => prev.filter(x => x.id !== p.id));
+        } catch (err) { toast.error(err.response?.data?.error || 'Failed to delete'); }
+        finally { setDeleting(null); }
+    };
 
     const totalInvoiced = purchases.reduce((s, p) => s + (p.total_invoice_amount || 0), 0);
 
@@ -54,7 +68,7 @@ export default function PurchasesReview() {
                     ) : (
                         <div className="table-wrap">
                             <table>
-                                <thead><tr><th>Request No</th><th>Invoice No</th><th>Vendor</th><th>Runner</th><th>Date</th><th>Invoice ₹</th><th>Status</th></tr></thead>
+                                <thead><tr><th>Request No</th><th>Invoice No</th><th>Vendor</th><th>Runner</th><th>Date</th><th>Invoice ₹</th><th>Status</th><th style={{ width: 50 }}></th></tr></thead>
                                 <tbody>
                                     {purchases.map(p => (
                                         <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/purchases/${p.id}`)}>
@@ -65,6 +79,17 @@ export default function PurchasesReview() {
                                             <td className="text-muted">{p.invoice_date || '—'}</td>
                                             <td className="font-semibold">₹{(p.total_invoice_amount || 0).toLocaleString('en-IN')}</td>
                                             <td><StatusBadge status={p.status} /></td>
+                                            <td>
+                                                <button
+                                                    className="btn btn-ghost btn-sm"
+                                                    title="Delete purchase"
+                                                    disabled={deleting === p.id}
+                                                    onClick={(e) => handleDelete(e, p)}
+                                                    style={{ color: 'var(--color-danger)', padding: '2px 6px', fontSize: 14, lineHeight: 1 }}
+                                                >
+                                                    {deleting === p.id ? <span className="spinner-inline"></span> : '\u2715'}
+                                                </button>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>

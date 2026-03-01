@@ -206,6 +206,7 @@ export default function PurchaseDetail() {
     const [actionLoading, setActionLoading] = useState(false);
     const [taxInvoiceFile, setTaxInvoiceFile] = useState(null);
     const [taxUploading, setTaxUploading] = useState(false);
+    const [deleteLoading, setDeleteLoading] = useState(false);
 
     const load = () => {
         api.get(`/purchases/${id}`).then(r => { setPurchase(r.data); setLoading(false); }).catch(() => setLoading(false));
@@ -260,6 +261,16 @@ export default function PurchaseDetail() {
         finally { setTaxUploading(false); }
     };
 
+    const handleDelete = async () => {
+        if (!confirm(`Delete purchase ${purchase.invoice_no || ''}?\n\nThis will permanently remove all line items, payments, and vendor confirmations.\n\nThis action cannot be undone.`)) return;
+        setDeleteLoading(true);
+        try {
+            await api.delete(`/purchases/${id}`);
+            toast.success('Purchase deleted');
+            navigate('/purchases-review');
+        } catch (err) { toast.error(err.response?.data?.error || 'Failed to delete'); setDeleteLoading(false); }
+    };
+
     return (
         <AppLayout pageTitle={`Purchase \u2013 ${purchase.invoice_no || 'Details'}`}>
             <div className="page-header">
@@ -270,11 +281,19 @@ export default function PurchaseDetail() {
                         <span style={{ marginLeft: 8 }}>Request: {purchase.request_no}</span>
                     </div>
                 </div>
-                {canPay && (
-                    <button className="btn btn-primary" onClick={() => navigate(`/payments?purchase_id=${id}`)}>
-                        Record Payment
-                    </button>
-                )}
+                <div style={{ display: 'flex', gap: 8 }}>
+                    {canPay && (
+                        <button className="btn btn-primary" onClick={() => navigate(`/payments?purchase_id=${id}`)}>
+                            Record Payment
+                        </button>
+                    )}
+                    {isAccountant && (
+                        <button className="btn btn-ghost" onClick={handleDelete} disabled={deleteLoading}
+                            style={{ color: 'var(--color-danger)', border: '1px solid var(--color-danger)' }}>
+                            {deleteLoading ? <><span className="spinner-inline"></span> Deleting...</> : 'Delete'}
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Purchase Info */}
